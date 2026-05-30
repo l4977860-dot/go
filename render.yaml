@@ -1,0 +1,15 @@
+# Render Blueprint — one-click deploy for 弈手围棋
+# https://render.com/docs/blueprint-spec
+
+services:
+  - type: web
+    name: go-weiqi
+    env: node
+    region: singapore  # or oregon — whichever is closer to your players
+    buildCommand: npm install && npm run build
+    startCommand: npm start
+    plan: free
+    healthCheckPath: /
+    envVars:
+      - key: NODE_ENV
+        value: production

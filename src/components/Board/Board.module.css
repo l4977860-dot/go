@@ -1,0 +1,221 @@
+/* ═══════════════════════════════════════════════════════
+   Go Board — intersection-based, authentic kaya wood
+   ═══════════════════════════════════════════════════════ */
+
+/* ── Wrapper: left labels + board + bottom labels ── */
+.boardWrapper {
+  display: grid;
+  grid-template-columns: auto 1fr;
+  grid-template-rows: 1fr auto;
+  gap: 0;
+  align-items: stretch;
+  user-select: none;
+  -webkit-user-select: none;
+}
+
+/* ── Board container (kaya-wood goban) ── */
+.board {
+  position: relative;
+  /* Large — dominates the screen */
+  width: min(90vw, 90vh, 720px);
+  aspect-ratio: 1;
+  border-radius: 8px;
+  box-shadow:
+    0 4px 24px rgba(0,0,0,0.5),
+    0 1px 3px rgba(0,0,0,0.3),
+    inset 0 1px 0 rgba(255,255,255,0.06);
+
+  /* ── Authentic kaya-wood grain ── */
+  background:
+    /* Micro grain — subtle hairline streaks */
+    repeating-linear-gradient(
+      1.5deg,
+      transparent,
+      transparent 1px,
+      rgba(160,130,70,0.06) 1px,
+      rgba(160,130,70,0.06) 2px
+    ),
+    repeating-linear-gradient(
+      87deg,
+      transparent,
+      transparent 25px,
+      rgba(150,115,55,0.05) 25px,
+      rgba(150,115,55,0.05) 27px
+    ),
+    repeating-linear-gradient(
+      93deg,
+      transparent,
+      transparent 55px,
+      rgba(170,140,80,0.04) 55px,
+      rgba(170,140,80,0.04) 57px
+    ),
+    /* Warm kaya-wood base gradient */
+    linear-gradient(
+      178deg,
+      #d8bc72 0%,
+      #ceac56 12%,
+      #d4b460 25%,
+      #c8a44a 40%,
+      #d2b058 55%,
+      #c6a246 70%,
+      #d0ae54 84%,
+      #c8a448 100%
+    );
+}
+
+/* ── SVG grid lines ── */
+.gridSvg {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  pointer-events: none;
+}
+
+/* ── Intersection click-target ── */
+.intersection {
+  position: absolute;
+  width: calc(90% / 18);
+  height: calc(90% / 18);
+  transform: translate(-50%, -50%);
+  z-index: 1;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.intersection:hover .hoverGhost {
+  opacity: 0.45;
+}
+
+/* ── Stone (sits on the intersection) ── */
+.stone {
+  position: absolute;
+  width: 94%;
+  height: 94%;
+  border-radius: 50%;
+  z-index: 10;
+  pointer-events: none;
+  animation: stonePlace 0.18s ease-out;
+}
+
+@keyframes stonePlace {
+  from {
+    transform: scale(0.6);
+    opacity: 0.5;
+  }
+  to {
+    transform: scale(1);
+    opacity: 1;
+  }
+}
+
+/* ── Matte slate (black) — subtle texture ── */
+.blackStone {
+  background:
+    radial-gradient(
+      circle at 42% 36%,
+      #636363 0%,
+      #3d3d3d 18%,
+      #222 50%,
+      #0f0f0f 100%
+    );
+  box-shadow:
+    2px 3px 5px rgba(0,0,0,0.5),
+    inset 0 -2px 3px rgba(0,0,0,0.35);
+}
+
+/* ── Matte shell (white) — warm, with subtle luster ── */
+.whiteStone {
+  background:
+    radial-gradient(
+      circle at 38% 34%,
+      #fefefe 0%,
+      #f8f5ef 16%,
+      #efe9da 42%,
+      #e2d9c2 100%
+    );
+  box-shadow:
+    1.5px 3px 6px rgba(0,0,0,0.32),
+    inset 0 -1.5px 3px rgba(0,0,0,0.06);
+}
+
+/* ── Hover ghost ── */
+.hoverGhost {
+  position: absolute;
+  width: 94%;
+  height: 94%;
+  border-radius: 50%;
+  z-index: 5;
+  pointer-events: none;
+  opacity: 0;
+  transition: opacity 0.1s ease;
+}
+
+.hoverGhostBlack {
+  background: radial-gradient(circle at 42% 36%, #444 0%, #111 100%);
+}
+
+.hoverGhostWhite {
+  background: radial-gradient(circle at 38% 34%, #fefefe 0%, #ddd6c4 100%);
+}
+
+/* ── Last-move marker ── */
+.lastMove::after {
+  content: '';
+  position: absolute;
+  width: 22%;
+  height: 22%;
+  border-radius: 50%;
+  z-index: 11;
+  pointer-events: none;
+}
+
+.blackStone.lastMove::after {
+  background: rgba(255,255,255,0.5);
+}
+
+.whiteStone.lastMove::after {
+  background: rgba(60,30,5,0.4);
+}
+
+/* ── Coordinate labels (shared) ── */
+.coordLabel {
+  position: absolute;
+  font-family: 'Georgia', 'Times New Roman', serif;
+  font-size: 0.6rem;
+  color: #8a7c62;
+  line-height: 1;
+  pointer-events: none;
+}
+
+/* ── Left-side labels (vertical, rows 1–19) ── */
+.leftLabels {
+  position: relative;
+  width: 16px;
+  grid-row: 1;
+  grid-column: 1;
+}
+
+.leftLabel {
+  composes: coordLabel;
+  right: 3px;
+  transform: translateY(-50%);
+  text-align: right;
+}
+
+/* ── Bottom labels (horizontal, columns 1–19) ── */
+.bottomLabels {
+  position: relative;
+  height: 14px;
+  grid-row: 2;
+  grid-column: 2;
+}
+
+.bottomLabel {
+  composes: coordLabel;
+  top: 1px;
+  transform: translateX(-50%);
+  text-align: center;
+}
