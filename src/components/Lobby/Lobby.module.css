@@ -160,6 +160,26 @@
   color: #a09078;
 }
 
+.btnAI {
+  border-color: rgba(160,140,100,0.3);
+  color: #b0a080;
+}
+
+.btnAI:hover {
+  border-color: rgba(180,155,110,0.5);
+  color: #d0c0a0;
+}
+
+.btnMatch {
+  border-color: rgba(160,130,140,0.3);
+  color: #b09890;
+}
+
+.btnMatch:hover {
+  border-color: rgba(180,145,155,0.5);
+  color: #d0b8b0;
+}
+
 .btnWide {
   width: 100%;
 }
@@ -219,4 +239,164 @@
   flex: 1;
   height: 1px;
   background: rgba(140,120,90,0.2);
+}
+
+/* ── Difficulty modal overlay ── */
+.modalOverlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(10,9,7,0.78);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 300;
+  backdrop-filter: blur(3px);
+}
+
+.modal {
+  background: #221f18;
+  border: 1px solid rgba(180,160,120,0.22);
+  border-radius: 10px;
+  padding: 32px 36px;
+  text-align: center;
+  box-shadow: 0 8px 40px rgba(0,0,0,0.6);
+  max-width: 340px;
+  width: 90%;
+}
+
+.modalTitle {
+  font-size: 1.2rem;
+  color: #c8bc98;
+  font-family: 'Georgia', serif;
+  font-weight: 400;
+  margin: 0 0 22px;
+  letter-spacing: 2px;
+}
+
+.difficultyList {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.diffBtn {
+  padding: 12px 24px;
+  border: 1px solid rgba(160,140,110,0.22);
+  border-radius: 5px;
+  background: rgba(255,255,255,0.02);
+  color: #b0a080;
+  font-size: 0.92rem;
+  font-family: 'Georgia', 'Times New Roman', 'Noto Serif', serif;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  letter-spacing: 2px;
+}
+
+.diffBtn:hover {
+  background: rgba(255,255,255,0.06);
+  border-color: rgba(190,160,120,0.45);
+  color: #d0c0a0;
+}
+
+.diffBtn:active {
+  transform: scale(0.97);
+}
+
+.diffLabel {
+  display: block;
+  font-size: 0.7rem;
+  color: #6e6250;
+  margin-top: 2px;
+  letter-spacing: 1px;
+}
+
+.modalCancel {
+  margin-top: 14px;
+  font-size: 0.8rem;
+  color: #8a7c62;
+  background: none;
+  border: none;
+  cursor: pointer;
+  font-family: inherit;
+  letter-spacing: 1px;
+  transition: color 0.2s;
+}
+
+.modalCancel:hover {
+  color: #b0a090;
+}
+
+/* ── History modal ── */
+.historyModal {
+  background: #221f18;
+  border: 1px solid rgba(180,160,120,0.22);
+  border-radius: 10px;
+  padding: 28px 24px;
+  text-align: center;
+  box-shadow: 0 8px 40px rgba(0,0,0,0.6);
+  max-width: 440px;
+  width: 92%;
+  max-height: 70vh;
+  display: flex;
+  flex-direction: column;
+}
+
+.historyList {
+  overflow-y: auto;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  max-height: 50vh;
+}
+
+.historyRow {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 10px 14px;
+  border: 1px solid rgba(160,140,110,0.1);
+  border-radius: 5px;
+  background: rgba(255,255,255,0.015);
+}
+
+.historyInfo {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  flex-wrap: wrap;
+  font-size: 0.78rem;
+}
+
+.historyDate {
+  color: #6e6250;
+  min-width: 70px;
+  text-align: left;
+}
+
+.historyRole {
+  color: #a09478;
+}
+
+.historyOpponent {
+  color: #8a7c62;
+  font-family: 'Courier New', monospace;
+  font-size: 0.72rem;
+}
+
+.historyReason {
+  color: #6e6250;
+  font-size: 0.7rem;
+}
+
+.historyWin {
+  color: #8a9a78;
+  font-weight: 600;
+  font-size: 0.9rem;
+  letter-spacing: 2px;
+}
+
+.historyLoss {
+  color: #9a8078;
+  font-size: 0.9rem;
+  letter-spacing: 2px;
 }

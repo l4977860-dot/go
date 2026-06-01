@@ -6,7 +6,7 @@ import { useReducer, useCallback, useMemo } from 'react';
 import type { BoardState, StoneColor, Move } from '../types';
 import { createEmptyBoard } from '../types';
 import { placeStone, cloneBoard, calculateTerritory } from './goEngine';
-import type { ScoreResult } from './goEngine';
+import type { ScoreResult, ReplayResult } from './goEngine';
 
 /* ─── State shape ─── */
 
@@ -39,7 +39,8 @@ type GameAction =
   | { type: 'PLACE_STONE'; row: number; col: number }
   | { type: 'PASS' }
   | { type: 'UNDO' }
-  | { type: 'RESET' };
+  | { type: 'RESET' }
+  | { type: 'SYNC_STATE'; payload: ReplayResult };
 
 /* ─── Initial state ─── */
 
@@ -187,6 +188,24 @@ function gameReducer(state: GameState, action: GameAction): GameState {
     case 'RESET':
       return createInitialState();
 
+    /* ── Sync full state (reconnection) ── */
+    case 'SYNC_STATE': {
+      const p = action.payload;
+      return {
+        ...state,
+        board: p.board,
+        currentPlayer: p.currentPlayer,
+        lastMove: p.lastMove,
+        capturedByBlack: p.capturedByBlack,
+        capturedByWhite: p.capturedByWhite,
+        boardHistory: p.boardHistory,
+        moveHistory: p.moveHistory,
+        passes: 0,
+        gameOver: false,
+        lastCaptureCount: 0,
+      };
+    }
+
     default:
       return state;
   }
@@ -216,6 +235,10 @@ export function useGameState() {
     dispatch({ type: 'RESET' });
   }, []);
 
+  const handleSyncState = useCallback((payload: ReplayResult) => {
+    dispatch({ type: 'SYNC_STATE', payload });
+  }, []);
+
   /* Territory score — computed only when game is over */
   const score: ScoreResult | null = useMemo(() => {
     if (!state.gameOver) return null;
@@ -233,5 +256,6 @@ export function useGameState() {
     handlePass,
     handleUndo,
     handleReset,
+    handleSyncState,
   };
 }

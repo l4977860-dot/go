@@ -6,7 +6,10 @@
 import { useState, useRef, useEffect, useCallback } from 'react';
 import type { StoneColor } from '../types';
 import { useGameState } from './useGameState';
+import { replayHistory } from './goEngine';
+import type { HistoryEntry } from './goEngine';
 import { playStoneSound } from '../utils/sound';
+import { getUserId } from '../utils/userId';
 
 /* ─── Types ─── */
 
@@ -23,6 +26,8 @@ interface ServerMessage {
   row?: number;
   col?: number;
   message?: string;
+  moveHistory?: HistoryEntry[];
+  loser?: string;
 }
 
 /* ─── Constants ─── */
@@ -57,6 +62,10 @@ export function useOnlineGame() {
   const [roomCode, setRoomCode] = useState<string>('');
   const [myColor, setMyColor] = useState<StoneColor | null>(null);
   const [opponentConnected, setOpponentConnected] = useState(false);
+  const [searching, setSearching] = useState(false);
+  const [disconnectCountdown, setDisconnectCountdown] = useState<number>(0);
+  const [disconnectLoss, setDisconnectLoss] = useState<string | null>(null); // loser userId
+  const [opponentResigned, setOpponentResigned] = useState(false);
   const [pendingRequest, setPendingRequest] = useState<PendingRequest | null>(null);
   const [error, setError] = useState<string | null>(null);
 
@@ -73,6 +82,8 @@ export function useOnlineGame() {
 
     ws.onopen = () => {
       setConnectionStatus('connected');
+      // Identify with persistent userId for reconnection
+      ws.send(JSON.stringify({ type: 'identify', userId: getUserId() }));
     };
 
     ws.onmessage = (event) => {
@@ -102,6 +113,38 @@ export function useOnlineGame() {
 
         case 'game_start':
           setOpponentConnected(true); // definitive: both players present
+          setSearching(false);
+          break;
+
+        case 'match_found':
+          setRoomCode(msg.code!);
+          setMyColor(msg.color!);
+          setOpponentConnected(true);
+          setSearching(false);
+          break;
+
+        case 'game_sync': {
+          // Reconnection — restore full game state from move history
+          const history: HistoryEntry[] = msg.moveHistory || [];
+          const replayed = replayHistory(history);
+          handlersRef.current?.handleSyncState(replayed);
+          setRoomCode(msg.code!);
+          setMyColor(msg.color!);
+          setOpponentConnected(true);
+          setSearching(false);
+          break;
+        }
+
+        case 'opponent_reconnected':
+          setOpponentConnected(true);
+          break;
+
+        case 'searching':
+          setSearching(true);
+          break;
+
+        case 'search_cancelled':
+          setSearching(false);
           break;
 
         case 'move':
@@ -144,7 +187,31 @@ export function useOnlineGame() {
 
         case 'opponent_disconnected':
           setOpponentConnected(false);
+          setDisconnectCountdown(30);
           break;
+
+        case 'opponent_reconnected':
+          setOpponentConnected(true);
+          setDisconnectCountdown(0);
+          break;
+
+        case 'opponent_resigned':
+          setOpponentConnected(false);
+          setOpponentResigned(true);
+          setDisconnectCountdown(0);
+          break;
+
+        case 'disconnect_loss': {
+          const myId = getUserId();
+          if (msg.loser === myId) {
+            setDisconnectLoss(myId);
+          } else {
+            setDisconnectLoss(msg.loser || 'opponent');
+          }
+          setDisconnectCountdown(0);
+          setOpponentConnected(false);
+          break;
+        }
 
         case 'error':
           setError(msg.message ?? 'Server error');
@@ -165,6 +232,35 @@ export function useOnlineGame() {
     wsRef.current = ws;
   }, []);
 
+  // ── Disconnect countdown interval ──
+  useEffect(() => {
+    if (disconnectCountdown <= 0) return;
+    const id = setInterval(() => {
+      setDisconnectCountdown((c) => {
+        if (c <= 1) { clearInterval(id); return 0; }
+        return c - 1;
+      });
+    }, 1000);
+    return () => clearInterval(id);
+  }, [disconnectCountdown > 0]); // eslint-disable-line
+
+  // ── Send game_over on normal game end (territory) ──
+  const gameOverSent = useRef(false);
+  useEffect(() => {
+    if (game.state.gameOver && game.score && !gameOverSent.current && roomCode) {
+      gameOverSent.current = true;
+      const winner = game.score.winner;
+      if (winner !== 'tie') {
+        wsRef.current?.send(JSON.stringify({
+          type: 'game_over',
+          winner,
+          reason: 'territory',
+        }));
+      }
+    }
+    if (!game.state.gameOver) gameOverSent.current = false;
+  }, [game.state.gameOver, game.score, roomCode]);
+
   // ── Disconnect on unmount ──
   useEffect(() => {
     return () => {
@@ -183,7 +279,21 @@ export function useOnlineGame() {
   const joinRoom = useCallback((code: string) => {
     if (!wsRef.current || wsRef.current.readyState !== WebSocket.OPEN) return;
     setError(null);
+    setSearching(false);
     wsRef.current.send(JSON.stringify({ type: 'join_room', code: code.toUpperCase() }));
+  }, []);
+
+  const findMatch = useCallback(() => {
+    if (!wsRef.current || wsRef.current.readyState !== WebSocket.OPEN) return;
+    setError(null);
+    setSearching(true);
+    wsRef.current.send(JSON.stringify({ type: 'find_match' }));
+  }, []);
+
+  const cancelSearch = useCallback(() => {
+    if (!wsRef.current || wsRef.current.readyState !== WebSocket.OPEN) return;
+    wsRef.current.send(JSON.stringify({ type: 'cancel_search' }));
+    setSearching(false);
   }, []);
 
   const leaveRoom = useCallback(() => {
@@ -192,6 +302,9 @@ export function useOnlineGame() {
     setRoomCode('');
     setMyColor(null);
     setOpponentConnected(false);
+    setSearching(false);
+    setOpponentResigned(false);
+    setDisconnectLoss(null);
     setPendingRequest(null);
     game.handleReset();
   }, [game]);
@@ -272,8 +385,14 @@ export function useOnlineGame() {
     roomCode,
     myColor,
     opponentConnected,
+    disconnectCountdown,
+    disconnectLoss,
+    opponentResigned,
+    searching,
     createRoom,
     joinRoom,
+    findMatch,
+    cancelSearch,
     leaveRoom,
 
     // Requests

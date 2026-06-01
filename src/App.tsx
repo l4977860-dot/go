@@ -3,25 +3,33 @@ import Board from './components/Board/Board';
 import Lobby from './components/Lobby/Lobby';
 import { useGameState } from './logic/useGameState';
 import { useOnlineGame } from './logic/useOnlineGame';
+import { useAIGame } from './logic/useAIGame';
+import type { AIDifficulty } from './logic/useAIGame';
 import { playCaptureSound } from './utils/sound';
+import { getUserId } from './utils/userId';
 import type { ScoreResult } from './logic/goEngine';
 import styles from './App.module.css';
 
 /* ═══════════════════════════════════════════════════
    App — 弈手围棋
-   Views: lobby → local game / online game
+   Views: lobby → local / online / ai
    ═══════════════════════════════════════════════════ */
 
-type AppView = 'lobby' | 'local' | 'online';
+type AppView = 'lobby' | 'local' | 'online' | 'ai';
 
 export default function App() {
   const [view, setView] = useState<AppView>('lobby');
+  const [showLeaveConfirm, setShowLeaveConfirm] = useState(false);
 
   // ── Local game ──
   const localGame = useGameState();
 
   // ── Online game ──
   const onlineGame = useOnlineGame();
+
+  // ── AI game ──
+  const [aiDifficulty, setAiDifficulty] = useState<AIDifficulty>('medium');
+  const aiGame = useAIGame(aiDifficulty);
 
   // ── Transition: lobby → online when opponent joins ──
   const prevOpponentConnected = useRef(false);
@@ -36,17 +44,31 @@ export default function App() {
     prevOpponentConnected.current = onlineGame.opponentConnected;
   }, [view, onlineGame.opponentConnected]);
 
-  // ── Active game (based on current view) ──
-  const game = view === 'online' ? onlineGame : localGame;
+  // ── Resolve active game ──
   const isOnline = view === 'online';
+  const isAI = view === 'ai';
+  const game = isOnline ? onlineGame : isAI ? aiGame : localGame;
+
+  // ── Turn / disabled logic ──
   const isOnlineTurn =
     !isOnline ||
     (onlineGame.myColor !== null &&
       game.state.currentPlayer === onlineGame.myColor &&
-      game.state.gameOver === false &&
+      !game.state.gameOver &&
       onlineGame.opponentConnected);
 
-  // ── Capture sound (works for both local and online) ──
+  const isHumanTurn =
+    !isAI ||
+    (game.state.currentPlayer === aiGame.humanColor &&
+      !game.state.gameOver &&
+      !aiGame.aiThinking);
+
+  const boardDisabled =
+    game.state.gameOver ||
+    (isOnline && !isOnlineTurn) ||
+    (isAI && !isHumanTurn);
+
+  // ── Capture sound ──
   const prevCaptureCount = useRef(0);
   useEffect(() => {
     if (
@@ -74,13 +96,21 @@ export default function App() {
         connectionStatus={onlineGame.connectionStatus}
         roomCode={onlineGame.roomCode}
         opponentConnected={onlineGame.opponentConnected}
+        searching={onlineGame.searching}
         error={onlineGame.error}
         onCreateRoom={onlineGame.createRoom}
         onJoinRoom={onlineGame.joinRoom}
+        onFindMatch={onlineGame.findMatch}
+        onCancelSearch={onlineGame.cancelSearch}
         onLeaveRoom={onlineGame.leaveRoom}
         onStartLocalGame={() => {
           localGame.handleReset();
           setView('local');
+        }}
+        onStartAIGame={(diff: AIDifficulty) => {
+          setAiDifficulty(diff);
+          aiGame.handleReset();
+          setView('ai');
         }}
         onClearError={onlineGame.clearError}
       />
@@ -88,7 +118,7 @@ export default function App() {
   }
 
   /* ══════════════════════════════════════════════
-     Game view (shared between local & online)
+     Game view (shared: local / online / ai)
      ══════════════════════════════════════════════ */
   const turnLabel =
     game.state.currentPlayer === 'black' ? 'Black' : 'White';
@@ -118,6 +148,23 @@ export default function App() {
         </div>
       )}
 
+      {/* ── AI indicator ── */}
+      {isAI && (
+        <div className={styles.onlineBar}>
+          <span
+            className={`${styles.onlineDot} ${
+              aiGame.aiThinking
+                ? styles.onlineDotDisconnected
+                : styles.onlineDotConnected
+            }`}
+          />
+          你执 ⚫ 黑棋 · AI {aiGame.difficulty === 'easy' ? '简单' : aiGame.difficulty === 'medium' ? '中等' : '困难'}
+          {aiGame.aiThinking && (
+            <span style={{ color: '#8a7c62', marginLeft: 6 }}>思考中...</span>
+          )}
+        </div>
+      )}
+
       {/* ── Info bar ── */}
       <div className={styles.infoBar}>
         <div className={styles.turnIndicator}>
@@ -134,7 +181,11 @@ export default function App() {
               ? isOnlineTurn
                 ? '轮到你'
                 : '等待对手'
-              : `${turnLabel} 执棋`}
+              : isAI
+                ? isHumanTurn
+                  ? '轮到你'
+                  : 'AI 思考中'
+                : `${turnLabel} 执棋`}
         </div>
 
         <div className={styles.captureCount}>
@@ -156,7 +207,7 @@ export default function App() {
         currentPlayer={game.state.currentPlayer}
         lastMove={game.state.lastMove}
         onIntersectionClick={game.handlePlaceStone}
-        disabled={game.state.gameOver || !isOnlineTurn}
+        disabled={boardDisabled}
       />
 
       {/* ── Controls ── */}
@@ -164,7 +215,7 @@ export default function App() {
         <button
           className={`${styles.btn} ${styles.btnPass}`}
           onClick={game.handlePass}
-          disabled={game.state.gameOver || !isOnlineTurn}
+          disabled={game.state.gameOver || !isOnlineTurn || (isAI && !isHumanTurn)}
         >
           虚手
         </button>
@@ -173,7 +224,8 @@ export default function App() {
           onClick={game.handleUndo}
           disabled={
             game.state.moveHistory.length === 0 ||
-            game.state.gameOver
+            game.state.gameOver ||
+            (isAI && game.state.moveHistory.length < 2)
           }
         >
           悔棋
@@ -181,20 +233,14 @@ export default function App() {
         <button
           className={`${styles.btn} ${styles.btnNew}`}
           onClick={game.handleReset}
-          disabled={
-            isOnline &&
-            !onlineGame.opponentConnected
-          }
+          disabled={isOnline && !onlineGame.opponentConnected}
         >
           新局
         </button>
-        {isOnline && (
+        {isOnline && onlineGame.opponentConnected && (
           <button
             className={`${styles.btn} ${styles.btnLeave}`}
-            onClick={() => {
-              onlineGame.leaveRoom();
-              setView('lobby');
-            }}
+            onClick={() => setShowLeaveConfirm(true)}
           >
             离开
           </button>
@@ -245,7 +291,7 @@ export default function App() {
         </div>
       )}
 
-      {/* ── Confirm dialog (undo/reset request from opponent) ── */}
+      {/* ── Confirm dialog (undo/reset from opponent) ── */}
       {isOnline && onlineGame.pendingRequest && (
         <div className={styles.confirmOverlay}>
           <div className={styles.confirmCard}>
@@ -272,15 +318,112 @@ export default function App() {
         </div>
       )}
 
-      {/* ── Disconnect overlay (online only) ── */}
-      {isOnline && !onlineGame.opponentConnected && !game.state.gameOver && (
+      {/* ── Leave confirm dialog (online only) ── */}
+      {showLeaveConfirm && (
+        <div className={styles.confirmOverlay} onClick={() => setShowLeaveConfirm(false)}>
+          <div className={styles.confirmCard} onClick={(e) => e.stopPropagation()}>
+            <p className={styles.confirmMessage}>
+              确定要离开吗？
+              <br />
+              <span style={{ color: '#9a7060', fontSize: '0.78rem' }}>离开将视为认输</span>
+            </p>
+            <div className={styles.confirmButtons}>
+              <button
+                className={`${styles.btn} ${styles.btnAccept}`}
+                onClick={() => {
+                  setShowLeaveConfirm(false);
+                  try { onlineGame.leaveRoom(); } catch {}
+                  setView('lobby');
+                }}
+              >
+                认输离开
+              </button>
+              <button
+                className={`${styles.btn} ${styles.btnReject}`}
+                onClick={() => setShowLeaveConfirm(false)}
+              >
+                取消
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ── Opponent resigned overlay (online only) ── */}
+      {isOnline && onlineGame.opponentResigned && !game.state.gameOver && (
+        <div className={styles.disconnectOverlay}>
+          <div className={styles.disconnectCard}>
+            <h3 className={styles.disconnectTitle}>对方认输</h3>
+            <p style={{ color: '#8a7c62', fontSize: '0.82rem', margin: '0 0 18px' }}>
+              对手主动离开了棋局
+            </p>
+            <button
+              className={`${styles.btn} ${styles.btnNew}`}
+              onClick={() => {
+                try { onlineGame.leaveRoom(); } catch {}
+                setView('lobby');
+              }}
+            >
+              返回大厅
+            </button>
+          </div>
+        </div>
+      )}
+
+      {/* ── Disconnect overlay with countdown (online only) ── */}
+      {isOnline && !onlineGame.opponentConnected && !game.state.gameOver && !onlineGame.disconnectLoss && !onlineGame.opponentResigned && (
         <div className={styles.disconnectOverlay}>
           <div className={styles.disconnectCard}>
             <h3 className={styles.disconnectTitle}>对手已断开连接</h3>
+            {onlineGame.disconnectCountdown > 0 ? (
+              <>
+                <p style={{ color: '#a09478', fontSize: '0.9rem', margin: '0 0 18px' }}>
+                  对手剩余重连时间{' '}
+                  <span style={{ color: '#c8bc98', fontWeight: 600, fontSize: '1.3rem' }}>
+                    {onlineGame.disconnectCountdown}
+                  </span>{' '}
+                  秒
+                </p>
+                <p style={{ color: '#6e6250', fontSize: '0.72rem', margin: '0 0 16px' }}>
+                  超时后对手将自动判负
+                </p>
+              </>
+            ) : (
+              <p style={{ color: '#8a7c62', fontSize: '0.82rem', margin: '0 0 18px' }}>
+                等待对手重连...
+              </p>
+            )}
             <button
               className={`${styles.btn} ${styles.btnLeave}`}
               onClick={() => {
-                onlineGame.leaveRoom();
+                try { onlineGame.leaveRoom(); } catch {}
+                setView('lobby');
+              }}
+            >
+              返回大厅
+            </button>
+          </div>
+        </div>
+      )}
+
+      {/* ── Disconnect loss overlay (online only) ── */}
+      {isOnline && onlineGame.disconnectLoss && (
+        <div className={styles.disconnectOverlay}>
+          <div className={styles.disconnectCard}>
+            <h3 className={styles.disconnectTitle}>
+              {onlineGame.disconnectLoss === getUserId()
+                ? '你已断连超时，判负'
+                : '对方断连被判负'}
+            </h3>
+            <p style={{ color: '#8a7c62', fontSize: '0.82rem', margin: '0 0 18px' }}>
+              {onlineGame.disconnectLoss === getUserId()
+                ? '你断开连接超过30秒'
+                : '对手在30秒内未重连，系统判负'}
+            </p>
+            <button
+              className={`${styles.btn} ${styles.btnNew}`}
+              onClick={() => {
+                try { onlineGame.leaveRoom(); } catch {}
                 setView('lobby');
               }}
             >

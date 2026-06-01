@@ -9,7 +9,8 @@
      • Ko (打劫) rule — simple ko via board-history comparison
    ═══════════════════════════════════════════════════════════════ */
 
-import type { BoardState, StoneColor } from '../types';
+import type { BoardState, StoneColor, Move } from '../types';
+import { createEmptyBoard } from '../types';
 
 /* ─── Constants ─── */
 
@@ -351,5 +352,69 @@ export function calculateTerritory(
     whiteTotal,
     winner,
     margin,
+  };
+}
+
+/* ─── History replay (for reconnection) ─── */
+
+export interface HistoryEntry {
+  row: number;   // -1 = pass
+  col: number;   // -1 = pass
+  color: StoneColor;
+}
+
+export interface ReplayResult {
+  board: BoardState;
+  capturedByBlack: number;
+  capturedByWhite: number;
+  currentPlayer: StoneColor;
+  lastMove: Move | null;
+  boardHistory: BoardState[];
+  moveHistory: Move[];
+}
+
+/**
+ * Replay a move history from scratch to reconstruct the full game state.
+ * Used when reconnecting — the server sends the move history and the
+ * client replays it to restore the exact board position.
+ *
+ * Pass is represented as { row: -1, col: -1, color }.
+ */
+export function replayHistory(history: HistoryEntry[]): ReplayResult {
+  let board = createEmptyBoard();
+  let capturedByBlack = 0;
+  let capturedByWhite = 0;
+  let currentPlayer: StoneColor = 'black';
+  let lastMove: Move | null = null;
+  const boardHistory: BoardState[] = [];
+  const moveHistory: Move[] = [];
+
+  for (const entry of history) {
+    if (entry.row === -1 && entry.col === -1) {
+      // Pass
+      currentPlayer = entry.color === 'black' ? 'white' : 'black';
+      lastMove = null;
+    } else {
+      const result = placeStone(board, entry.row, entry.col, entry.color, null);
+      if (result.success) {
+        board = result.board;
+        capturedByBlack += entry.color === 'black' ? result.captured.length : 0;
+        capturedByWhite += entry.color === 'white' ? result.captured.length : 0;
+        currentPlayer = entry.color === 'black' ? 'white' : 'black';
+        lastMove = { row: entry.row, col: entry.col, color: entry.color };
+        moveHistory.push(lastMove);
+        boardHistory.push(cloneBoard(board));
+      }
+    }
+  }
+
+  return {
+    board,
+    capturedByBlack,
+    capturedByWhite,
+    currentPlayer,
+    lastMove,
+    boardHistory,
+    moveHistory,
   };
 }
